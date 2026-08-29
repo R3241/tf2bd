@@ -15,6 +15,12 @@
 #include <srcon/srcon.h>
 #include <vdf_parser.hpp>
 
+#include <fmt/format.h>
+#include <fmt/std.h>
+#include <fmt/ostream.h>
+#include <fmt/chrono.h>
+#include <fmt/xchar.h>
+
 #include <chrono>
 #include <random>
 #include <ITF2BotDetectorRenderer.h>
@@ -208,7 +214,7 @@ static std::string FindUserLaunchOptions(const Settings& settings)
 			return {}; // User has never set any launch options
 		}
 
-		DebugLog("Found user-specified TF2 command line args in {}: {}", configPath, std::quoted(keyIter->second));
+		DebugLog("Found user-specified TF2 command line args in {}: {}", configPath, fmt::streamed(std::quoted(keyIter->second)));
 		return keyIter->second; // Return launch options
 	}
 	catch (const std::exception&)
@@ -266,7 +272,7 @@ static void OpenTF2(const Settings& settings, const std::string_view& rconPasswo
 	// 437 is the max we can go before tf2 doesn't launch (512 - RecommendedParams.length)
 	if (settings.m_UseLaunchRecommendedParams && args.length() <= 437)
 #else
-	if (settings.m_UseLaunchRecommendedParams) 
+	if (settings.m_UseLaunchRecommendedParams)
 #endif
 	{
 		args
@@ -310,10 +316,12 @@ static void OpenTF2(const Settings& settings, const std::string_view& rconPasswo
 	const std::string final_cmd = fmt::format("{}/ubuntu12_32/reaper SteamLaunch AppId=440 -- {}", settings.GetSteamDir(), steam_launch_wrapper);
 	*/
 	// getenv("TF2BD_TF2_LD_PRELOAD")
-	Processes::Launch(runtime_sniper, sniper_args);
+	// tf.sh expects the tf2 install dir (where it lives) as the cwd, not the sniper runtime dir.
+	Processes::Launch(runtime_sniper, sniper_args, false, gameEXE.parent_path());
 #else
 	// if not linux we don't have to do all of that and just launch the game.
-	Processes::Launch(gameEXE, args);
+	// launch with the game's own dir as cwd (ShellExecute otherwise inherits our cwd).
+	Processes::Launch(gameEXE, args, false, gameEXE.parent_path());
 #endif
 }
 
@@ -365,7 +373,7 @@ bool TF2CommandLinePage::RCONClientData::Update()
 					break;
 				default:
 					m_MessageColor = { 1, 1, 0, 1 };
-					m_Message = mh::format("Unexpected error: {}", e.what());
+					m_Message = fmt::format("Unexpected error: {}", e.what());
 					break;
 				}
 				m_Future = {};
@@ -374,7 +382,7 @@ bool TF2CommandLinePage::RCONClientData::Update()
 			{
 				DebugLogWarning(MH_SOURCE_LOCATION_CURRENT(), e.what());
 				m_MessageColor = { 1, 0, 0, 1 };
-				m_Message = mh::format("RCON connection unsuccessful: {}", e.what());
+				m_Message = fmt::format("RCON connection unsuccessful: {}", e.what());
 				m_Future = {};
 			}
 		}
@@ -553,7 +561,7 @@ auto TF2CommandLinePage::OnDraw(const DrawState& ds) -> OnDrawResult
 	{
 		if (Platform::Processes::IsTF2Running())
 		{
-			// 
+			//
 			if (ds.m_Settings->m_ShouldCloseWhenTFCloses) {
 				ds.m_Settings->m_Unsaved.m_GameLaunchedAndShouldClose = true;
 			}
@@ -598,7 +606,7 @@ auto TF2CommandLinePage::OnDraw(const DrawState& ds) -> OnDrawResult
 	{
 		auto& args = m_Data.m_CommandLineArgs.value();
 		ImGui::TextFmt("Connecting to TF2 on 127.0.0.1:{} with password {}...",
-			args.m_RCONPort.value(), std::quoted(args.m_RCONPassword));
+			args.m_RCONPort.value(), fmt::streamed(std::quoted(args.m_RCONPassword)));
 
 		if (!m_Data.m_TestRCONClient) {
 			m_Data.m_TestRCONClient.emplace(args.m_RCONPassword, args.m_RCONPort.value());
